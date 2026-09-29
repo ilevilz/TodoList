@@ -1,0 +1,19 @@
+# 构建产物
+bin/
+obj/
+publish/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# 本地数据（应用运行时写到 %LOCALAPPDATA%，不在仓库内，这里兜个底）
+*.tmp
+*.bak
+*.corrupt-*
+
+# 截图临时文件
+*.png.orig

@@ -1,0 +1,7 @@
+# 统一换行符，避免 Windows / macOS / Linux 之间 clone 时整个仓库显示为已修改
+* text=auto eol=lf
+
+# 二进制文件不做换行符转换
+*.png binary
+*.ico binary
+*.jpg binary

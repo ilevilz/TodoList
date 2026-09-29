@@ -1,0 +1,2304 @@
+<Window
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:LMTodo.ViewModels"
+    xmlns:model="using:LMTodo.Models"
+    x:Class="LMTodo.Views.MainWindow"
+    x:DataType="vm:MainWindowViewModel"
+    x:Name="Root"
+    Width="1440"
+    Height="900"
+    MinWidth="1240"
+    MinHeight="720"
+    Title="LMTodo">
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+N" Command="{Binding QuickAddCommand}" />
+        <KeyBinding Gesture="Ctrl+1" Command="{Binding ShowTodayCommand}" />
+        <KeyBinding Gesture="Ctrl+2" Command="{Binding ShowUpcomingCommand}" />
+        <KeyBinding Gesture="Ctrl+3" Command="{Binding ShowAllCommand}" />
+        <KeyBinding Gesture="Ctrl+4" Command="{Binding ShowBoardCommand}" />
+    </Window.KeyBindings>
+
+
+    <Window.Resources>
+
+        <!-- ================================================= -->
+        <!-- 任务卡片：列表 / 日历 / 习惯 共用一个模板           -->
+        <!-- ================================================= -->
+
+        <DataTemplate
+            x:Key="TaskCardTemplate"
+            x:DataType="model:TodoItem">
+
+            <Border
+                Classes="card"
+                Classes.overdue="{Binding IsOverdue}"
+                Classes.selected="{Binding IsSelected}"
+                Padding="12"
+                Margin="0,0,0,8"
+                Cursor="Hand"
+                PointerPressed="TaskCard_PointerPressed">
+
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+
+                    <!-- 勾选 -->
+                    <ToggleButton
+                        Classes="task-check"
+                        IsChecked="{Binding IsCompleted, Mode=OneWay}"
+                        Command="{ReflectionBinding #Root.DataContext.ToggleCompleteCommand}"
+                        CommandParameter="{Binding}"
+                        VerticalAlignment="Top">
+
+                        <TextBlock
+                            Text="✓"
+                            FontSize="12"
+                            FontWeight="Bold" />
+
+                    </ToggleButton>
+
+
+                    <!-- 主体 -->
+                    <StackPanel Grid.Column="1" Spacing="5">
+
+                        <TextBlock
+                            Text="{Binding DisplayTitle}"
+                            FontSize="13.5"
+                            FontWeight="SemiBold"
+                            TextWrapping="Wrap"
+                            Foreground="#344454" />
+
+                        <TextBlock
+                            Text="{Binding Notes}"
+                            IsVisible="{Binding HasNotes}"
+                            FontSize="11"
+                            MaxLines="2"
+                            TextWrapping="Wrap"
+                            TextTrimming="CharacterEllipsis"
+                            Foreground="#8A98A3" />
+
+                        <!-- 时间 / 状态 / 优先级 -->
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+
+                            <Border
+                                Classes="chip"
+                                Classes.danger="{Binding IsOverdue}"
+                                IsVisible="{Binding HasDueDate}">
+
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+
+                                    <TextBlock
+                                        Text="◷"
+                                        FontSize="9"
+                                        Foreground="#8FA6B0" />
+
+                                    <TextBlock
+                                        Text="{Binding DueShortLabel}"
+                                        FontSize="10"
+                                        Foreground="{Binding IsOverdue,
+                                            Converter={StaticResource DueDateBrushConverter}}" />
+
+                                </StackPanel>
+
+                            </Border>
+
+                            <Border Classes="chip">
+                                <TextBlock
+                                    Text="{Binding StatusLabel}"
+                                    FontSize="10"
+                                    Foreground="#7F909B" />
+                            </Border>
+
+                            <Border Classes="chip pink">
+                                <TextBlock
+                                    Text="{Binding PriorityLabel}"
+                                    FontSize="10"
+                                    Foreground="{Binding Priority,
+                                        Converter={StaticResource PriorityBrushConverter}}" />
+                            </Border>
+
+                            <Border
+                                Classes="chip done"
+                                IsVisible="{Binding IsRepeating}">
+
+                                <TextBlock
+                                    Text="{Binding RepeatLabel}"
+                                    FontSize="10"
+                                    Foreground="#6E9C88" />
+
+                            </Border>
+
+                        </StackPanel>
+
+                        <!-- 子任务进度 -->
+                        <StackPanel
+                            Spacing="4"
+                            IsVisible="{Binding HasSubTasks}">
+
+                            <TextBlock
+                                Text="{Binding SubTaskProgressLabel,
+                                    StringFormat='子任务 {0}'}"
+                                FontSize="10"
+                                Foreground="#7F909B" />
+
+                            <ProgressBar
+                                Value="{Binding ProgressPercent}"
+                                Minimum="0"
+                                Maximum="100"
+                                MaxWidth="220"
+                                HorizontalAlignment="Left"
+                                Width="220" />
+
+                        </StackPanel>
+
+                        <!-- 清单 / 标签 / 负责人 -->
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+
+                            <Border
+                                Classes="chip"
+                                IsVisible="{Binding HasProject}">
+
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+
+                                    <Border
+                                        Width="4"
+                                        Height="4"
+                                        CornerRadius="2"
+                                        Background="#8AC6D9"
+                                        VerticalAlignment="Center" />
+
+                                    <TextBlock
+                                        Text="{Binding Project}"
+                                        FontSize="10"
+                                        Foreground="#78909B" />
+
+                                </StackPanel>
+
+                            </Border>
+
+                            <TextBlock
+                                Text="{Binding TagsLabel}"
+                                FontSize="10"
+                                Foreground="#C37C8C"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding HasTags}" />
+
+                            <TextBlock
+                                Text="{Binding AssigneeLabel,
+                                    StringFormat='@ {0}'}"
+                                FontSize="10"
+                                Foreground="#7E9BA8"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding HasAssignee}" />
+
+                        </StackPanel>
+
+                    </StackPanel>
+
+
+                    <!-- 操作 -->
+                    <StackPanel
+                        Grid.Column="2"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Top"
+                        Spacing="2">
+
+                        <Button
+                            Classes="icon"
+                            Content="→"
+                            ToolTip.Tip="开始执行"
+                            Command="{ReflectionBinding #Root.DataContext.StartTaskCommand}"
+                            CommandParameter="{Binding}" />
+
+                        <Button
+                            Classes="icon"
+                            Content="□"
+                            ToolTip.Tip="归档"
+                            Command="{ReflectionBinding #Root.DataContext.ArchiveTaskCommand}"
+                            CommandParameter="{Binding}" />
+
+                        <Button
+                            Classes="icon"
+                            Content="×"
+                            ToolTip.Tip="删除"
+                            Command="{ReflectionBinding #Root.DataContext.DeleteTaskCommand}"
+                            CommandParameter="{Binding}" />
+
+                    </StackPanel>
+
+                </Grid>
+
+            </Border>
+
+        </DataTemplate>
+
+    </Window.Resources>
+
+
+    <!-- ===================================================== -->
+    <!-- 根布局                                                -->
+    <!-- ===================================================== -->
+
+    <Grid
+        RowDefinitions="70,*"
+        ColumnDefinitions="252,*"
+        Background="#F7FBFD"
+        ClipToBounds="True">
+
+
+        <!-- ================================================= -->
+        <!-- 背景壁纸（本地自选图片，铺满整窗）                  -->
+        <!-- ================================================= -->
+
+        <Panel
+            Grid.RowSpan="2"
+            Grid.ColumnSpan="2"
+            IsVisible="{Binding HasWallpaper}">
+
+            <Image
+                Source="{Binding WallpaperSource}"
+                Stretch="UniformToFill" />
+
+            <!-- 白纱：80% 不透明，花哨的照片也不会吃掉文字对比度 -->
+            <Border Background="#CCFFFFFF" />
+
+        </Panel>
+
+
+        <!-- ================================================= -->
+        <!-- 顶栏                                              -->
+        <!-- ================================================= -->
+
+        <Border
+            Grid.Row="0"
+            Grid.ColumnSpan="2"
+            Background="#F0FFFFFF"
+            BorderBrush="#DDECF1"
+            BorderThickness="0,0,0,1"
+            Padding="18,0"
+            ClipToBounds="True">
+
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="18">
+
+                <!-- LOGO -->
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    VerticalAlignment="Center">
+
+                    <Border
+                        Width="34"
+                        Height="34"
+                        CornerRadius="11"
+                        Background="#ACE2F1">
+
+                        <TextBlock
+                            Text="✓"
+                            FontSize="17"
+                            FontWeight="Bold"
+                            Foreground="#2E6B80"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+
+                    </Border>
+
+                    <StackPanel VerticalAlignment="Center">
+
+                        <TextBlock
+                            Text="LMTodo"
+                            FontSize="16"
+                            FontWeight="SemiBold"
+                            Foreground="#344454" />
+
+                        <TextBlock
+                            Text="Organize your focus."
+                            FontSize="9.5"
+                            Foreground="#9AA6AF" />
+
+                    </StackPanel>
+
+                </StackPanel>
+
+
+                <!-- 快速添加 -->
+                <Border
+                    Grid.Column="1"
+                    Height="48"
+                    MaxWidth="620"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    Background="#F7FCFD"
+                    BorderBrush="#D7EBF0"
+                    BorderThickness="1"
+                    CornerRadius="11"
+                    ClipToBounds="True"
+                    ToolTip.Tip="支持自然语言：明天下午3点开会 #会议 @工作 !高 [写提纲][成稿] //备注">
+
+                    <Grid
+                        ColumnDefinitions="Auto,*,Auto"
+                        ColumnSpacing="4"
+                        Margin="8,0">
+
+                        <TextBlock
+                            Text="＋"
+                            FontSize="17"
+                            Foreground="#67BBD3"
+                            VerticalAlignment="Center" />
+
+                        <Grid
+                            Grid.Column="1"
+                            RowDefinitions="Auto,Auto"
+                            VerticalAlignment="Center">
+
+                            <TextBox
+                                BorderThickness="0"
+                                Background="Transparent"
+                                Padding="0"
+                                MinHeight="0"
+                                VerticalContentAlignment="Center"
+                                FontSize="13"
+                                PlaceholderText="快速添加：明天下午3点开会 #会议 @工作 !高"
+                                Text="{Binding QuickAddText,
+                                               UpdateSourceTrigger=PropertyChanged}">
+
+                                <TextBox.KeyBindings>
+                                    <KeyBinding
+                                        Gesture="Enter"
+                                        Command="{Binding QuickAddCommand}" />
+                                </TextBox.KeyBindings>
+
+                            </TextBox>
+
+                            <TextBlock
+                                Grid.Row="1"
+                                Text="{Binding QuickAddPreview,
+                                    StringFormat='识别为 · {0}'}"
+                                IsVisible="{Binding QuickAddPreview,
+                                    Converter={StaticResource StringNotEmptyConverter}}"
+                                FontSize="9.5"
+                                Foreground="#67BBD3"
+                                TextTrimming="CharacterEllipsis" />
+
+                        </Grid>
+
+                        <Button
+                            Grid.Column="2"
+                            Classes="primary"
+                            Content="添加"
+                            Command="{Binding QuickAddCommand}"
+                            VerticalAlignment="Center" />
+
+                    </Grid>
+
+                </Border>
+
+
+                <!-- 右侧：搜索 + 工具 -->
+                <StackPanel
+                    Grid.Column="2"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+
+                    <Border
+                        Width="216"
+                        Height="36"
+                        Background="#F9FCFD"
+                        BorderBrush="#D6EAF0"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        ClipToBounds="True">
+
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="9,0">
+
+                            <TextBlock
+                                Text="⌕"
+                                FontSize="14"
+                                Foreground="#8AC6D9"
+                                VerticalAlignment="Center" />
+
+                            <TextBox
+                                Grid.Column="1"
+                                BorderThickness="0"
+                                Background="Transparent"
+                                Padding="0"
+                                MinHeight="0"
+                                VerticalContentAlignment="Center"
+                                FontSize="12"
+                                PlaceholderText="搜索任务…"
+                                Text="{Binding SearchText,
+                                               UpdateSourceTrigger=PropertyChanged}" />
+
+                            <Button
+                                Grid.Column="2"
+                                Classes="icon"
+                                Content="×"
+                                FontSize="11"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding SearchText,
+                                    Converter={StaticResource StringNotEmptyConverter}}"
+                                Command="{Binding ClearSearchCommand}" />
+
+                        </Grid>
+
+                    </Border>
+
+                    <Button Classes="ghost" Content="导出 ▾">
+
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+
+                                <MenuItem
+                                    Header="导出 CSV（Excel 可打开）"
+                                    Click="ExportCsv_Click" />
+
+                                <MenuItem
+                                    Header="导出 ICS（导入日历）"
+                                    Click="ExportIcs_Click" />
+
+                                <MenuItem
+                                    Header="导出 Markdown"
+                                    Click="ExportMarkdown_Click" />
+
+                                <Separator />
+
+                                <MenuItem
+                                    Header="备份为 JSON"
+                                    Click="BackupJson_Click" />
+
+                                <MenuItem
+                                    Header="从 JSON 恢复（合并）"
+                                    Click="ImportJsonMerge_Click" />
+
+                                <MenuItem
+                                    Header="从 JSON 恢复（覆盖全部）"
+                                    Click="ImportJsonReplace_Click" />
+
+                            </MenuFlyout>
+                        </Button.Flyout>
+
+                    </Button>
+
+                    <Button Classes="ghost" Content="外观 ▾">
+
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+
+                                <MenuItem
+                                    Header="选择背景壁纸…"
+                                    Click="PickWallpaper_Click" />
+
+                                <MenuItem
+                                    Header="恢复默认背景"
+                                    Click="ClearWallpaper_Click" />
+
+                            </MenuFlyout>
+                        </Button.Flyout>
+
+                    </Button>
+
+                </StackPanel>
+
+            </Grid>
+
+        </Border>
+
+
+        <!-- ================================================= -->
+        <!-- 侧边栏                                            -->
+        <!-- ================================================= -->
+
+        <Border
+            Grid.Row="1"
+            Grid.Column="0"
+            Background="#F0FFFFFF"
+            BorderBrush="#DDECF1"
+            BorderThickness="0,0,1,0"
+            Padding="12"
+            ClipToBounds="True">
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+
+                <StackPanel Spacing="3">
+
+
+                    <TextBlock Classes="section" Text="视图" />
+
+
+                    <ToggleButton
+                        Classes="nav"
+                        Command="{Binding ShowTodayCommand}"
+                        IsChecked="{Binding IsTodayView, Mode=OneWay}">
+
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+
+                            <TextBlock Text="◷" FontSize="12" VerticalAlignment="Center" />
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="今日"
+                                Margin="9,0,0,0"
+                                VerticalAlignment="Center" />
+
+                            <Border
+                                Grid.Column="2"
+                                Classes="chip"
+                                Padding="6,1"
+                                IsVisible="{Binding TodayCount, Converter={StaticResource CountToBoolConverter}}">
+
+                                <TextBlock
+                                    Text="{Binding TodayCount}"
+                                    FontSize="9.5"
+                                    Foreground="#4E9DB8" />
+
+                            </Border>
+
+                        </Grid>
+
+                    </ToggleButton>
+
+
+                    <ToggleButton
+                        Classes="nav"
+                        Command="{Binding ShowUpcomingCommand}"
+                        IsChecked="{Binding IsUpcomingView, Mode=OneWay}">
+
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+
+                            <TextBlock Text="→" FontSize="12" VerticalAlignment="Center" />
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="即将到期"
+                                Margin="9,0,0,0"
+                                VerticalAlignment="Center" />
+
+                            <Border
+                                Grid.Column="2"
+                                Classes="chip"
+                                Padding="6,1"
+                                IsVisible="{Binding UpcomingCount, Converter={StaticResource CountToBoolConverter}}">
+
+                                <TextBlock
+                                    Text="{Binding UpcomingCount}"
+                                    FontSize="9.5"
+                                    Foreground="#4E9DB8" />
+
+                            </Border>
+
+                        </Grid>
+
+                    </ToggleButton>
+
+
+                    <ToggleButton
+                        Classes="nav"
+                        Command="{Binding ShowAllCommand}"
+                        IsChecked="{Binding IsAllView, Mode=OneWay}">
+
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+
+                            <TextBlock Text="☷" FontSize="12" VerticalAlignment="Center" />
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="所有任务"
+                                Margin="9,0,0,0"
+                                VerticalAlignment="Center" />
+
+                            <Border
+                                Grid.Column="2"
+                                Classes="chip"
+                                Padding="6,1"
+                                IsVisible="{Binding TotalCount, Converter={StaticResource CountToBoolConverter}}">
+
+                                <TextBlock
+                                    Text="{Binding TotalCount}"
+                                    FontSize="9.5"
+                                    Foreground="#4E9DB8" />
+
+                            </Border>
+
+                        </Grid>
+
+                    </ToggleButton>
+
+
+                    <ToggleButton
+                        Classes="nav"
+                        Command="{Binding ShowCalendarCommand}"
+                        IsChecked="{Binding IsCalendarView, Mode=OneWay}">
+
+                        <Grid ColumnDefinitions="Auto,*">
+
+                            <TextBlock Text="▦" FontSize="12" VerticalAlignment="Center" />
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="日历"
+                                Margin="9,0,0,0"
+                                VerticalAlignment="Center" />
+
+                        </Grid>
+
+                    </ToggleButton>
+
+
+                    <ToggleButton
+                        Classes="nav"
+                        Command="{Binding ShowBoardCommand}"
+                        IsChecked="{Binding IsBoardView, Mode=OneWay}">
+
+                        <Grid ColumnDefinitions="Auto,*">
+
+                            <TextBlock Text="▥" FontSize="12" VerticalAlignment="Center" />
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="看板"
+                                Margin="9,0,0,0"
+                                VerticalAlignment="Center" />
+
+                        </Grid>
+
+                    </ToggleButton>
+
+
+                    <ToggleButton
+                        Classes="nav"
+                        Command="{Binding ShowHabitsCommand}"
+                        IsChecked="{Binding IsHabitsView, Mode=OneWay}">
+
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+
+                            <TextBlock Text="◈" FontSize="12" VerticalAlignment="Center" />
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="习惯打卡"
+                                Margin="9,0,0,0"
+                                VerticalAlignment="Center" />
+
+                            <Border
+                                Grid.Column="2"
+                                Classes="chip pink"
+                                Padding="6,1"
+                                IsVisible="{Binding HabitCount, Converter={StaticResource CountToBoolConverter}}">
+
+                                <TextBlock
+                                    Text="{Binding HabitCount}"
+                                    FontSize="9.5"
+                                    Foreground="#B8798A" />
+
+                            </Border>
+
+                        </Grid>
+
+                    </ToggleButton>
+
+
+                    <ToggleButton
+                        Classes="nav"
+                        Command="{Binding ShowArchivedCommand}"
+                        IsChecked="{Binding IsArchivedView, Mode=OneWay}">
+
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+
+                            <TextBlock Text="□" FontSize="12" VerticalAlignment="Center" />
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="已归档"
+                                Margin="9,0,0,0"
+                                VerticalAlignment="Center" />
+
+                            <Border
+                                Grid.Column="2"
+                                Classes="chip"
+                                Padding="6,1"
+                                IsVisible="{Binding ArchivedCount, Converter={StaticResource CountToBoolConverter}}">
+
+                                <TextBlock
+                                    Text="{Binding ArchivedCount}"
+                                    FontSize="9.5"
+                                    Foreground="#8A98A3" />
+
+                            </Border>
+
+                        </Grid>
+
+                    </ToggleButton>
+
+
+                    <Separator Margin="4,10" />
+
+
+                    <!-- ========================================= -->
+                    <!-- 统计                                      -->
+                    <!-- ========================================= -->
+
+                    <TextBlock Classes="section" Text="统计" />
+
+                    <Border
+                        Background="#F0FAFD"
+                        CornerRadius="11"
+                        Padding="11">
+
+                        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="7">
+
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="待完成" FontSize="11" Foreground="#7B8995" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    Text="{Binding ActiveCount}"
+                                    FontSize="16"
+                                    FontWeight="SemiBold"
+                                    Foreground="#4D9DB7" />
+                            </Grid>
+
+                            <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                                <TextBlock Text="已完成" FontSize="11" Foreground="#7B8995" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    Text="{Binding CompletedCount}"
+                                    FontSize="16"
+                                    FontWeight="SemiBold"
+                                    Foreground="#6E9C88" />
+                            </Grid>
+
+                            <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                                <TextBlock Text="已逾期" FontSize="11" Foreground="#7B8995" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    Text="{Binding OverdueCount}"
+                                    FontSize="16"
+                                    FontWeight="SemiBold"
+                                    Foreground="#E0506E" />
+                            </Grid>
+
+                        </Grid>
+
+                    </Border>
+
+
+                    <Border
+                        Margin="0,8,0,0"
+                        Background="#FFF3F5"
+                        CornerRadius="11"
+                        Padding="11">
+
+                        <StackPanel Spacing="8">
+
+                            <Grid ColumnDefinitions="*,Auto">
+
+                                <StackPanel>
+                                    <TextBlock Text="连续完成" FontSize="11" Foreground="#8A98A3" />
+                                    <TextBlock
+                                        Text="{Binding CurrentStreak,
+                                            StringFormat='{}{0} 天'}"
+                                        FontSize="19"
+                                        FontWeight="SemiBold"
+                                        Foreground="#CB7D8D" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                    <TextBlock
+                                        Text="今日完成"
+                                        FontSize="11"
+                                        Foreground="#8A98A3"
+                                        HorizontalAlignment="Right" />
+                                    <TextBlock
+                                        Text="{Binding TodayCompletedCount}"
+                                        FontSize="19"
+                                        FontWeight="SemiBold"
+                                        Foreground="#CB7D8D"
+                                        HorizontalAlignment="Right" />
+                                </StackPanel>
+
+                            </Grid>
+
+                            <StackPanel Spacing="4">
+
+                                <Grid ColumnDefinitions="*,Auto">
+
+                                    <TextBlock
+                                        Text="完成率"
+                                        FontSize="10.5"
+                                        Foreground="#8A98A3" />
+
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        Text="{Binding CompletionRate,
+                                            StringFormat='{}{0}%'}"
+                                        FontSize="10.5"
+                                        Foreground="#CB7D8D"
+                                        HorizontalAlignment="Right" />
+
+                                </Grid>
+
+                                <ProgressBar
+                                    Value="{Binding CompletionRate}"
+                                    Minimum="0"
+                                    Maximum="100" />
+
+                            </StackPanel>
+
+                        </StackPanel>
+
+                    </Border>
+
+
+                    <Separator Margin="4,10" />
+
+
+                    <!-- ========================================= -->
+                    <!-- 筛选                                      -->
+                    <!-- ========================================= -->
+
+                    <TextBlock Classes="section" Text="筛选" />
+
+                    <TextBlock Text="状态" Classes="field-label" Margin="6,0,0,3" />
+                    <ComboBox
+                        x:CompileBindings="False"
+                        ItemsSource="{Binding StatusFilters}"
+                        SelectedItem="{Binding StatusFilter, Mode=TwoWay}"
+                        ItemTemplate="{StaticResource FilterOptionTemplate}" />
+
+                    <TextBlock Text="标签" Classes="field-label" Margin="6,8,0,3" />
+                    <ComboBox
+                        ItemsSource="{Binding AvailableTags}"
+                        SelectedItem="{Binding SelectedTagFilter, Mode=TwoWay}" />
+
+                    <TextBlock Text="清单 / 项目" Classes="field-label" Margin="6,8,0,3" />
+                    <ComboBox
+                        x:CompileBindings="False"
+                        ItemsSource="{Binding ListFilterOptions}"
+                        SelectedItem="{Binding SelectedListFilter, Mode=TwoWay}">
+
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ListFilterOption">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="7">
+
+                                    <Border
+                                        Width="5"
+                                        Height="5"
+                                        CornerRadius="3"
+                                        VerticalAlignment="Center"
+                                        Background="{Binding Color,
+                                            Converter={StaticResource HexToBrushConverter}}" />
+
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        Text="{Binding Label}"
+                                        FontSize="12"
+                                        TextTrimming="CharacterEllipsis" />
+
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        Text="{Binding Count}"
+                                        FontSize="10"
+                                        Foreground="#9AA6AF"
+                                        VerticalAlignment="Center" />
+
+                                </Grid>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+
+                    </ComboBox>
+
+                    <TextBlock Text="排序" Classes="field-label" Margin="6,8,0,3" />
+                    <ComboBox
+                        x:CompileBindings="False"
+                        ItemsSource="{Binding SortOptions}"
+                        SelectedItem="{Binding SortOption, Mode=TwoWay}"
+                        ItemTemplate="{StaticResource FilterOptionTemplate}" />
+
+                    <CheckBox
+                        Margin="4,8,0,0"
+                        Content="只看逾期"
+                        FontSize="11.5"
+                        IsChecked="{Binding OverdueOnly, Mode=TwoWay}" />
+
+
+                    <Separator Margin="4,10" />
+
+
+                    <!-- ========================================= -->
+                    <!-- 清单管理                                  -->
+                    <!-- ========================================= -->
+
+                    <TextBlock Classes="section" Text="清单管理" />
+
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+
+                        <TextBox
+                            Classes="editor"
+                            Text="{Binding NewListName,
+                                           UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="新建清单…">
+
+                            <TextBox.KeyBindings>
+                                <KeyBinding
+                                    Gesture="Enter"
+                                    Command="{Binding CreateListCommand}" />
+                            </TextBox.KeyBindings>
+
+                        </TextBox>
+
+                        <Button
+                            Grid.Column="1"
+                            Classes="ghost"
+                            Content="+"
+                            Command="{Binding CreateListCommand}" />
+
+                    </Grid>
+
+                    <ItemsControl
+                        ItemsSource="{Binding Lists}"
+                        Margin="0,6,0,0">
+
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="model:TaskList">
+
+                                <Grid
+                                    ColumnDefinitions="Auto,*,Auto"
+                                    ColumnSpacing="7"
+                                    Margin="4,2">
+
+                                    <Border
+                                        Width="6"
+                                        Height="6"
+                                        CornerRadius="3"
+                                        VerticalAlignment="Center"
+                                        Background="{Binding Color,
+                                            Converter={StaticResource HexToBrushConverter}}" />
+
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        Text="{Binding Name}"
+                                        FontSize="11.5"
+                                        Foreground="#5D6F7A"
+                                        TextTrimming="CharacterEllipsis"
+                                        VerticalAlignment="Center" />
+
+                                    <Button
+                                        Grid.Column="2"
+                                        Classes="icon"
+                                        Content="×"
+                                        FontSize="10"
+                                        ToolTip.Tip="删除清单（任务会移到未分类）"
+                                        Command="{ReflectionBinding #Root.DataContext.DeleteListCommand}"
+                                        CommandParameter="{Binding}" />
+
+                                </Grid>
+
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+
+                    </ItemsControl>
+
+
+                    <Separator Margin="4,10" />
+
+
+                    <Button
+                        Classes="ghost"
+                        Content="归档已完成任务"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        Command="{Binding ClearCompletedCommand}" />
+
+
+                    <Border
+                        Margin="0,10,0,0"
+                        Background="#F8FCFD"
+                        CornerRadius="9"
+                        Padding="9">
+
+                        <StackPanel Spacing="3">
+
+                            <TextBlock
+                                Text="{Binding StatusMessage}"
+                                FontSize="9.5"
+                                TextWrapping="Wrap"
+                                Foreground="#9AA6AF" />
+
+                        </StackPanel>
+
+                    </Border>
+
+                </StackPanel>
+
+            </ScrollViewer>
+
+        </Border>
+
+
+        <!-- ================================================= -->
+        <!-- 内容区                                            -->
+        <!-- ================================================= -->
+
+        <Grid
+            Grid.Row="1"
+            Grid.Column="1"
+            Margin="14"
+            ColumnDefinitions="*,376"
+            ColumnSpacing="14"
+            ClipToBounds="True">
+
+
+            <!-- ============================================= -->
+            <!-- 左侧：多视图容器                                -->
+            <!-- ============================================= -->
+
+            <Grid Grid.Column="0" ClipToBounds="True">
+
+
+                <!-- ============ 列表视图（今日/即将/全部/归档共用） ============ -->
+
+                <Grid IsVisible="{Binding IsListView}">
+
+                    <Grid RowDefinitions="Auto,Auto,*">
+
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+
+                            <StackPanel>
+
+                                <TextBlock
+                                    Text="{Binding ViewTitle}"
+                                    FontSize="25"
+                                    FontWeight="SemiBold"
+                                    Foreground="#344454" />
+
+                                <TextBlock
+                                    Text="{Binding ViewSubtitle}"
+                                    FontSize="11"
+                                    Foreground="#8796A1"
+                                    Margin="0,2,0,0" />
+
+                            </StackPanel>
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="{Binding VisibleTasks.Count,
+                                    StringFormat='{}{0} 项'}"
+                                VerticalAlignment="Bottom"
+                                FontSize="11"
+                                Foreground="#83AAB8" />
+
+                        </Grid>
+
+
+                        <!-- 空状态 -->
+                        <Border
+                            Grid.Row="1"
+                            Margin="0,0,0,10"
+                            Background="#F4FBFD"
+                            CornerRadius="10"
+                            Padding="12"
+                            IsVisible="{Binding VisibleTasks.Count,
+                                Converter={StaticResource CountToBoolConverter},
+                                ConverterParameter=invert}">
+
+                            <TextBlock
+                                Text="这里还没有任务。用顶部输入框回车即可快速添加。"
+                                FontSize="11"
+                                Foreground="#8FA6B0" />
+
+                        </Border>
+
+
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+
+                            <ItemsControl
+                                ItemsSource="{Binding VisibleTasks}"
+                                ItemTemplate="{StaticResource TaskCardTemplate}" />
+
+                        </ScrollViewer>
+
+                    </Grid>
+
+                </Grid>
+
+
+                <!-- ============ 日历视图 ============ -->
+
+                <Grid IsVisible="{Binding IsCalendarView}">
+
+                    <Grid RowDefinitions="Auto,*">
+
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
+
+                            <StackPanel>
+
+                                <TextBlock
+                                    Text="{Binding CalendarMonth,
+                                        StringFormat='{}{0:yyyy 年 MM 月}'}"
+                                    FontSize="25"
+                                    FontWeight="SemiBold"
+                                    Foreground="#344454" />
+
+                                <TextBlock
+                                    Text="点击日期查看当天任务"
+                                    FontSize="11"
+                                    Foreground="#8796A1"
+                                    Margin="0,2,0,0" />
+
+                            </StackPanel>
+
+                            <StackPanel
+                                Grid.Column="2"
+                                Orientation="Horizontal"
+                                Spacing="6"
+                                VerticalAlignment="Bottom">
+
+                                <Button
+                                    Classes="ghost"
+                                    Content="‹"
+                                    Command="{Binding PreviousCalendarMonthCommand}" />
+
+                                <Button
+                                    Classes="ghost"
+                                    Content="今天"
+                                    Command="{Binding GoCalendarTodayCommand}" />
+
+                                <Button
+                                    Classes="ghost"
+                                    Content="›"
+                                    Command="{Binding NextCalendarMonthCommand}" />
+
+                            </StackPanel>
+
+                        </Grid>
+
+
+                        <Grid Grid.Row="1" ColumnDefinitions="*,300" ColumnSpacing="14">
+
+                            <!-- 月历网格 -->
+                            <Border Classes="card" Padding="10" ClipToBounds="True">
+
+                                <Grid RowDefinitions="Auto,*">
+
+                                    <!-- 星期表头 -->
+                                    <Grid
+                                        ColumnDefinitions="*,*,*,*,*,*,*"
+                                        Margin="0,0,0,6">
+
+                                        <TextBlock Grid.Column="0" Text="一" FontSize="10" Foreground="#9AA6AF" HorizontalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="二" FontSize="10" Foreground="#9AA6AF" HorizontalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Text="三" FontSize="10" Foreground="#9AA6AF" HorizontalAlignment="Center" />
+                                        <TextBlock Grid.Column="3" Text="四" FontSize="10" Foreground="#9AA6AF" HorizontalAlignment="Center" />
+                                        <TextBlock Grid.Column="4" Text="五" FontSize="10" Foreground="#9AA6AF" HorizontalAlignment="Center" />
+                                        <TextBlock Grid.Column="5" Text="六" FontSize="10" Foreground="#9AA6AF" HorizontalAlignment="Center" />
+                                        <TextBlock Grid.Column="6" Text="日" FontSize="10" Foreground="#C89AA6" HorizontalAlignment="Center" />
+
+                                    </Grid>
+
+
+                                    <ItemsControl
+                                        Grid.Row="1"
+                                        ItemsSource="{Binding CalendarDays}">
+
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Columns="7" Rows="6" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+
+                                        <ItemsControl.ItemTemplate>
+
+                                            <DataTemplate x:DataType="vm:CalendarDayViewModel">
+
+                                                <Button
+                                                    Classes="cal-button"
+                                                    Padding="0"
+                                                    Margin="2"
+                                                    BorderThickness="0"
+                                                    Background="Transparent"
+                                                    Command="{ReflectionBinding #Root.DataContext.SelectCalendarDayCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip.Tip="{Binding Tooltip}">
+
+                                                    <Border
+                                                        Classes="cal-cell"
+                                                        Classes.padding-day="{Binding !IsCurrentMonth}"
+                                                        Classes.selected="{Binding IsSelected}"
+                                                        Padding="5">
+
+                                                        <Grid RowDefinitions="Auto,*">
+
+                                                            <Grid ColumnDefinitions="*,Auto">
+
+                                                                <TextBlock
+                                                                    Text="{Binding DayLabel}"
+                                                                    FontSize="11"
+                                                                    FontWeight="SemiBold"
+                                                                    Foreground="#54646F" />
+
+                                                                <Border
+                                                                    Grid.Column="1"
+                                                                    Width="5"
+                                                                    Height="5"
+                                                                    CornerRadius="3"
+                                                                    VerticalAlignment="Center"
+                                                                    Background="#FF9DB0"
+                                                                    IsVisible="{Binding HasOverdue}" />
+
+                                                            </Grid>
+
+
+                                                            <StackPanel
+                                                                Grid.Row="1"
+                                                                Spacing="1"
+                                                                Margin="0,3,0,0">
+
+                                                                <ItemsControl ItemsSource="{Binding Preview}">
+
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="x:String">
+
+                                                                            <TextBlock
+                                                                                Text="{Binding}"
+                                                                                FontSize="8.5"
+                                                                                Foreground="#7E96A2"
+                                                                                TextTrimming="CharacterEllipsis"
+                                                                                MaxLines="1" />
+
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+
+                                                                </ItemsControl>
+
+                                                                <TextBlock
+                                                                    Text="{Binding TaskCount,
+                                                                        StringFormat='+{0}'}"
+                                                                    FontSize="8"
+                                                                    Foreground="#B4C6CE"
+                                                                    IsVisible="{Binding TaskCount, Converter={StaticResource CountToBoolConverter}}" />
+
+                                                            </StackPanel>
+
+                                                        </Grid>
+
+                                                    </Border>
+
+                                                </Button>
+
+                                            </DataTemplate>
+
+                                        </ItemsControl.ItemTemplate>
+
+                                    </ItemsControl>
+
+                                </Grid>
+
+                            </Border>
+
+
+                            <!-- 当天任务 -->
+                            <Border
+                                Grid.Column="1"
+                                Classes="card"
+                                Padding="14"
+                                ClipToBounds="True">
+
+                                <Grid RowDefinitions="Auto,*">
+
+                                    <StackPanel Margin="0,0,0,10">
+
+                                        <TextBlock
+                                            Text="{Binding CalendarDate,
+                                                StringFormat='{}{0:MM 月 dd 日}'}"
+                                            FontSize="15"
+                                            FontWeight="SemiBold"
+                                            Foreground="#344454" />
+
+                                        <TextBlock
+                                            Text="{Binding CalendarTasks.Count,
+                                                StringFormat='{}{0} 项任务'}"
+                                            FontSize="10.5"
+                                            Foreground="#8796A1" />
+
+                                    </StackPanel>
+
+                                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+
+                                        <ItemsControl
+                                            ItemsSource="{Binding CalendarTasks}"
+                                            ItemTemplate="{StaticResource TaskCardTemplate}" />
+
+                                    </ScrollViewer>
+
+                                </Grid>
+
+                            </Border>
+
+                        </Grid>
+
+                    </Grid>
+
+                </Grid>
+
+
+                <!-- ============ 看板视图（拖拽） ============ -->
+
+                <Grid IsVisible="{Binding IsBoardView}">
+
+                    <Grid RowDefinitions="Auto,*">
+
+                        <StackPanel Margin="0,0,0,12">
+
+                            <TextBlock
+                                Text="看板"
+                                FontSize="25"
+                                FontWeight="SemiBold"
+                                Foreground="#344454" />
+
+                            <TextBlock
+                                Text="按住卡片左侧的 ⋮⋮ 拖到其他列即可调整状态"
+                                FontSize="11"
+                                Foreground="#8796A1"
+                                Margin="0,2,0,0" />
+
+                        </StackPanel>
+
+
+                        <ItemsControl
+                            Grid.Row="1"
+                            ItemsSource="{Binding BoardColumns}">
+
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="3" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+
+                            <ItemsControl.ItemTemplate>
+
+                                <DataTemplate x:DataType="vm:BoardColumnViewModel">
+
+                                    <Border
+                                        Classes="board-column"
+                                        Margin="5"
+                                        Padding="9"
+                                        ClipToBounds="True"
+                                        DragDrop.AllowDrop="True"
+                                        Tag="{Binding Status}"
+                                        DragDrop.DragOver="Board_DragOver"
+                                        DragDrop.Drop="Board_Drop">
+
+                                        <Grid RowDefinitions="Auto,*">
+
+                                            <!-- 列头 -->
+                                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="3,2,3,10">
+
+                                                <Border
+                                                    Width="5"
+                                                    Height="26"
+                                                    CornerRadius="3"
+                                                    VerticalAlignment="Center"
+                                                    Background="{Binding AccentColor,
+                                                        Converter={StaticResource HexToBrushConverter}}" />
+
+                                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+
+                                                    <TextBlock
+                                                        Text="{Binding Title}"
+                                                        FontSize="14"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#344454" />
+
+                                                    <TextBlock
+                                                        Text="{Binding Subtitle}"
+                                                        FontSize="10"
+                                                        Foreground="#8A98A3" />
+
+                                                </StackPanel>
+
+                                                <Border
+                                                    Grid.Column="2"
+                                                    Classes="chip"
+                                                    Padding="7,1"
+                                                    VerticalAlignment="Center">
+
+                                                    <TextBlock
+                                                        Text="{Binding Items.Count}"
+                                                        FontSize="10"
+                                                        Foreground="#4E9DB8" />
+
+                                                </Border>
+
+                                            </Grid>
+
+
+                                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+
+                                                <ItemsControl ItemsSource="{Binding Items}">
+
+                                                    <ItemsControl.ItemTemplate>
+
+                                                        <DataTemplate x:DataType="model:TodoItem">
+
+                                                            <Border
+                                                                Classes="board-card"
+                                                                Classes.overdue="{Binding IsOverdue}"
+                                                                Classes.selected="{Binding IsSelected}"
+                                                                Padding="10"
+                                                                Margin="0,0,0,7"
+                                                                Cursor="Hand"
+                                                                PointerPressed="TaskCard_PointerPressed">
+
+                                                                <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
+
+                                                                    <Grid ColumnDefinitions="Auto,*">
+
+                                                                        <TextBlock
+                                                                            Text="⋮⋮"
+                                                                            FontSize="12"
+                                                                            Foreground="#8CAAB5"
+                                                                            Cursor="Hand"
+                                                                            VerticalAlignment="Top"
+                                                                            ToolTip.Tip="拖动改变状态"
+                                                                            PointerPressed="TaskDragHandle_PointerPressed" />
+
+                                                                        <TextBlock
+                                                                            Grid.Column="1"
+                                                                            Text="{Binding DisplayTitle}"
+                                                                            FontSize="12"
+                                                                            FontWeight="SemiBold"
+                                                                            TextWrapping="Wrap"
+                                                                            Foreground="#344454"
+                                                                            Margin="5,0,0,0" />
+
+                                                                    </Grid>
+
+                                                                    <StackPanel
+                                                                        Grid.Row="1"
+                                                                        Orientation="Horizontal"
+                                                                        Spacing="6">
+
+                                                                        <TextBlock
+                                                                            Text="{Binding DueShortLabel}"
+                                                                            FontSize="9"
+                                                                            Foreground="{Binding IsOverdue,
+                                                                                Converter={StaticResource DueDateBrushConverter}}" />
+
+                                                                        <TextBlock
+                                                                            Text="{Binding PriorityLabel}"
+                                                                            FontSize="9"
+                                                                            Foreground="#C17B8A" />
+
+                                                                        <TextBlock
+                                                                            Text="{Binding SubTaskProgressLabel}"
+                                                                            FontSize="9"
+                                                                            Foreground="#8FA6B0"
+                                                                            IsVisible="{Binding HasSubTasks}" />
+
+                                                                    </StackPanel>
+
+                                                                </Grid>
+
+                                                            </Border>
+
+                                                        </DataTemplate>
+
+                                                    </ItemsControl.ItemTemplate>
+
+                                                </ItemsControl>
+
+                                            </ScrollViewer>
+
+                                        </Grid>
+
+                                    </Border>
+
+                                </DataTemplate>
+
+                            </ItemsControl.ItemTemplate>
+
+                        </ItemsControl>
+
+                    </Grid>
+
+                </Grid>
+
+
+                <!-- ============ 习惯打卡视图 ============ -->
+
+                <Grid IsVisible="{Binding IsHabitsView}">
+
+                    <Grid RowDefinitions="Auto,Auto,*">
+
+                        <StackPanel Margin="0,0,0,12">
+
+                            <TextBlock
+                                Text="习惯打卡"
+                                FontSize="25"
+                                FontWeight="SemiBold"
+                                Foreground="#344454" />
+
+                            <TextBlock
+                                Text="所有设置了重复规则的任务都会出现在这里"
+                                FontSize="11"
+                                Foreground="#8796A1"
+                                Margin="0,2,0,0" />
+
+                        </StackPanel>
+
+
+                        <Border
+                            Grid.Row="1"
+                            Margin="0,0,0,10"
+                            Background="#F4FBFD"
+                            CornerRadius="10"
+                            Padding="12"
+                            IsVisible="{Binding HabitCount,
+                                Converter={StaticResource CountToBoolConverter},
+                                ConverterParameter=invert}">
+
+                            <TextBlock
+                                Text="还没有重复任务。在任务详情里把「重复规则」设为每天 / 每周 / 每月即可开始打卡。"
+                                FontSize="11"
+                                TextWrapping="Wrap"
+                                Foreground="#8FA6B0" />
+
+                        </Border>
+
+
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+
+                            <ItemsControl ItemsSource="{Binding HabitTasks}">
+
+                                <ItemsControl.ItemTemplate>
+
+                                    <DataTemplate x:DataType="model:TodoItem">
+
+                                        <Border
+                                            Classes="card"
+                                            Padding="14"
+                                            Margin="0,0,0,9">
+
+                                            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+
+                                                <!-- 标题行 -->
+                                                <Grid ColumnDefinitions="*,Auto">
+
+                                                    <StackPanel>
+
+                                                        <TextBlock
+                                                            Text="{Binding DisplayTitle}"
+                                                            FontSize="14"
+                                                            FontWeight="SemiBold"
+                                                            TextWrapping="Wrap"
+                                                            Foreground="#344454" />
+
+                                                        <StackPanel
+                                                            Orientation="Horizontal"
+                                                            Spacing="6"
+                                                            Margin="0,4,0,0">
+
+                                                            <Border Classes="chip done">
+                                                                <TextBlock
+                                                                    Text="{Binding RepeatLabel}"
+                                                                    FontSize="10"
+                                                                    Foreground="#6E9C88" />
+                                                            </Border>
+
+                                                            <Border Classes="chip">
+                                                                <TextBlock
+                                                                    Text="{Binding DueShortLabel}"
+                                                                    FontSize="10"
+                                                                    Foreground="#7F909B" />
+                                                            </Border>
+
+                                                        </StackPanel>
+
+                                                    </StackPanel>
+
+                                                    <Button
+                                                        Grid.Column="1"
+                                                        Classes="primary"
+                                                        Content="打卡"
+                                                        VerticalAlignment="Top"
+                                                        Command="{ReflectionBinding #Root.DataContext.CompleteTaskCommand}"
+                                                        CommandParameter="{Binding}" />
+
+                                                </Grid>
+
+
+                                                <!-- 统计 -->
+                                                <Grid
+                                                    Grid.Row="1"
+                                                    ColumnDefinitions="*,*,*">
+
+                                                    <StackPanel>
+                                                        <TextBlock Text="当前连续" FontSize="10" Foreground="#8A98A3" />
+                                                        <TextBlock
+                                                            Text="{Binding StreakLabel}"
+                                                            FontSize="17"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#CB7D8D" />
+                                                    </StackPanel>
+
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="最长连续" FontSize="10" Foreground="#8A98A3" />
+                                                        <TextBlock
+                                                            Text="{Binding BestStreak,
+                                                                StringFormat='{}{0}'}"
+                                                            FontSize="17"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#8FA6B0" />
+                                                    </StackPanel>
+
+                                                    <StackPanel Grid.Column="2">
+                                                        <TextBlock Text="累计完成" FontSize="10" Foreground="#8A98A3" />
+                                                        <TextBlock
+                                                            Text="{Binding TotalCompletions}"
+                                                            FontSize="17"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#4D9DB7" />
+                                                    </StackPanel>
+
+                                                </Grid>
+
+
+                                                <!-- 最近 30 天 -->
+                                                <StackPanel Grid.Row="2" Spacing="5">
+
+                                                    <TextBlock
+                                                        Text="最近 30 天"
+                                                        FontSize="10"
+                                                        Foreground="#8A98A3" />
+
+                                                    <ItemsControl ItemsSource="{Binding HabitDays}">
+
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel Orientation="Horizontal" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+
+                                                        <ItemsControl.ItemTemplate>
+
+                                                            <DataTemplate x:DataType="model:HabitDay">
+
+                                                                <Border
+                                                                    Width="13"
+                                                                    Height="13"
+                                                                    CornerRadius="3"
+                                                                    Margin="0,0,3,3"
+                                                                    ToolTip.Tip="{Binding Tooltip}"
+                                                                    Background="{Binding Done,
+                                                                        Converter={StaticResource HabitBrushConverter}}"
+                                                                    BorderBrush="{Binding Done,
+                                                                        Converter={StaticResource HabitBrushConverter},
+                                                                        ConverterParameter=border}"
+                                                                    BorderThickness="1" />
+
+                                                            </DataTemplate>
+
+                                                        </ItemsControl.ItemTemplate>
+
+                                                    </ItemsControl>
+
+                                                </StackPanel>
+
+                                            </Grid>
+
+                                        </Border>
+
+                                    </DataTemplate>
+
+                                </ItemsControl.ItemTemplate>
+
+                            </ItemsControl>
+
+                        </ScrollViewer>
+
+                    </Grid>
+
+                </Grid>
+
+            </Grid>
+
+
+            <!-- ============================================= -->
+            <!-- 右侧：任务详情                                  -->
+            <!-- ============================================= -->
+
+            <Border
+                Grid.Column="1"
+                Classes="card"
+                Padding="16"
+                ClipToBounds="True">
+
+                <Grid RowDefinitions="Auto,*">
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+
+                        <Border
+                            Width="6"
+                            Height="22"
+                            CornerRadius="3"
+                            Background="#FFCCD5" />
+
+                        <StackPanel>
+
+                            <TextBlock
+                                Text="任务详情"
+                                FontSize="15"
+                                FontWeight="SemiBold"
+                                Foreground="#344454" />
+
+                            <TextBlock
+                                Text="修改后自动保存"
+                                FontSize="10"
+                                Foreground="#8A98A3" />
+
+                        </StackPanel>
+
+                    </StackPanel>
+
+
+                    <!-- ============ 有选中 ============ -->
+
+                    <ScrollViewer
+                        Grid.Row="1"
+                        Margin="0,16,0,0"
+                        VerticalScrollBarVisibility="Auto"
+                        DataContext="{Binding SelectedTask}"
+                        x:DataType="model:TodoItem"
+                        IsVisible="{Binding #Root.DataContext.HasSelection}">
+
+                        <StackPanel Spacing="13">
+
+                            <!-- 标题 -->
+                            <StackPanel>
+                                <TextBlock Text="标题" Classes="field-label" />
+                                <TextBox
+                                    Classes="editor"
+                                    Text="{Binding Title,
+                                                   Mode=TwoWay,
+                                                   UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+
+
+                            <!-- 状态快捷 -->
+                            <StackPanel Spacing="6">
+
+                                <TextBlock Text="状态" Classes="field-label" />
+
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+
+                                    <Button
+                                        Classes="tiny"
+                                        Content="开始"
+                                        Command="{ReflectionBinding #Root.DataContext.StartTaskCommand}"
+                                        CommandParameter="{Binding}" />
+
+                                    <Button
+                                        Classes="tiny"
+                                        Content="完成"
+                                        Command="{ReflectionBinding #Root.DataContext.CompleteTaskCommand}"
+                                        CommandParameter="{Binding}" />
+
+                                    <Button
+                                        Classes="tiny"
+                                        Content="取消完成"
+                                        Command="{ReflectionBinding #Root.DataContext.CancelCompleteCommand}"
+                                        CommandParameter="{Binding}" />
+
+                                </StackPanel>
+
+                                <ComboBox
+                                    x:CompileBindings="False"
+                                    ItemsSource="{ReflectionBinding #Root.DataContext.Statuses}"
+                                    SelectedItem="{Binding Status, Mode=TwoWay}"
+                                    ItemTemplate="{StaticResource EnumOptionTemplate}" />
+
+                            </StackPanel>
+
+
+                            <!-- 备注 -->
+                            <StackPanel>
+                                <TextBlock Text="备注 / 描述" Classes="field-label" />
+                                <TextBox
+                                    Classes="editor"
+                                    Height="88"
+                                    TextWrapping="Wrap"
+                                    AcceptsReturn="True"
+                                    VerticalContentAlignment="Top"
+                                    Text="{Binding Notes,
+                                                   Mode=TwoWay,
+                                                   UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="补充任务背景、步骤或备注…" />
+                            </StackPanel>
+
+
+                            <!-- 清单 + 优先级 -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="9">
+
+                                <StackPanel>
+                                    <TextBlock Text="所属清单" Classes="field-label" />
+                                    <TextBox
+                                        Classes="editor"
+                                        Text="{Binding Project,
+                                                       Mode=TwoWay,
+                                                       UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="例如：工作" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="优先级" Classes="field-label" />
+                                    <ComboBox
+                                        x:CompileBindings="False"
+                                        ItemsSource="{ReflectionBinding #Root.DataContext.Priorities}"
+                                        SelectedItem="{Binding Priority, Mode=TwoWay}"
+                                        ItemTemplate="{StaticResource EnumOptionTemplate}" />
+                                </StackPanel>
+
+                            </Grid>
+
+
+                            <!-- 标签 -->
+                            <StackPanel>
+                                <TextBlock Text="标签" Classes="field-label" />
+                                <TextBox
+                                    Classes="editor"
+                                    Text="{ReflectionBinding #Root.DataContext.TagsText,
+                                                   Mode=TwoWay,
+                                                   UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="多个标签用逗号分隔" />
+                            </StackPanel>
+
+
+                            <!-- 截止时间 -->
+                            <StackPanel Spacing="7">
+
+                                <TextBlock Text="截止日期与时间" Classes="field-label" />
+
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="9">
+
+                                    <CalendarDatePicker
+                                        MinWidth="0"
+                                        SelectedDate="{Binding DueDate, Mode=TwoWay}"
+                                        PlaceholderText="选择日期" />
+
+                                    <TimePicker
+                                        Grid.Column="1"
+                                        MinWidth="0"
+                                        ClockIdentifier="24HourClock"
+                                        MinuteIncrement="5"
+                                        SelectedTime="{Binding DueTime, Mode=TwoWay}" />
+
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+
+                                    <Button Classes="tiny" Content="今天"
+                                            Command="{ReflectionBinding #Root.DataContext.SetDuePresetCommand}"
+                                            CommandParameter="today" />
+
+                                    <Button Classes="tiny" Content="明天"
+                                            Command="{ReflectionBinding #Root.DataContext.SetDuePresetCommand}"
+                                            CommandParameter="tomorrow" />
+
+                                    <Button Classes="tiny" Content="下周"
+                                            Command="{ReflectionBinding #Root.DataContext.SetDuePresetCommand}"
+                                            CommandParameter="nextweek" />
+
+                                    <Button Classes="tiny" Content="清除"
+                                            Command="{ReflectionBinding #Root.DataContext.SetDuePresetCommand}"
+                                            CommandParameter="clear" />
+
+                                </StackPanel>
+
+                            </StackPanel>
+
+
+                            <!-- 提醒 + 重复 -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="9">
+
+                                <StackPanel>
+                                    <TextBlock Text="到期提醒" Classes="field-label" />
+                                    <ComboBox
+                                        x:CompileBindings="False"
+                                        ItemsSource="{ReflectionBinding #Root.DataContext.ReminderOptions}"
+                                        SelectedItem="{Binding ReminderMinutesBefore,
+                                                               Mode=TwoWay}"
+                                        ItemTemplate="{StaticResource EnumOptionTemplate}" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="重复规则" Classes="field-label" />
+                                    <ComboBox
+                                        x:CompileBindings="False"
+                                        ItemsSource="{ReflectionBinding #Root.DataContext.RepeatRules}"
+                                        SelectedItem="{Binding Repeat, Mode=TwoWay}"
+                                        ItemTemplate="{StaticResource EnumOptionTemplate}" />
+                                </StackPanel>
+
+                            </Grid>
+
+                            <CheckBox
+                                Content="开启提醒通知"
+                                FontSize="11.5"
+                                IsChecked="{Binding ReminderEnabled, Mode=TwoWay}" />
+
+
+                            <!-- 子任务 -->
+                            <StackPanel Spacing="7">
+
+                                <Grid ColumnDefinitions="*,Auto">
+
+                                    <TextBlock Text="子任务 / 步骤" Classes="field-label" />
+
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        Text="{Binding SubTaskProgressLabel}"
+                                        FontSize="10"
+                                        Foreground="#8A98A3" />
+
+                                </Grid>
+
+                                <ProgressBar
+                                    Value="{Binding ProgressPercent}"
+                                    Minimum="0"
+                                    Maximum="100"
+                                    IsVisible="{Binding HasSubTasks}" />
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+
+                                    <TextBox
+                                        Classes="editor"
+                                        Text="{ReflectionBinding #Root.DataContext.NewSubTaskTitle,
+                                                       UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="添加步骤，可用逗号一次加多条">
+
+                                        <TextBox.KeyBindings>
+                                            <KeyBinding
+                                                Gesture="Enter"
+                                                Command="{ReflectionBinding #Root.DataContext.AddSubTaskCommand}" />
+                                        </TextBox.KeyBindings>
+
+                                    </TextBox>
+
+                                    <Button
+                                        Grid.Column="1"
+                                        Classes="ghost"
+                                        Content="+"
+                                        Command="{ReflectionBinding #Root.DataContext.AddSubTaskCommand}" />
+
+                                </Grid>
+
+                                <ItemsControl ItemsSource="{Binding SubTasks}">
+
+                                    <ItemsControl.ItemTemplate>
+
+                                        <DataTemplate x:DataType="model:SubTask">
+
+                                            <Grid
+                                                ColumnDefinitions="Auto,*,Auto"
+                                                ColumnSpacing="7"
+                                                Margin="0,2">
+
+                                                <CheckBox
+                                                    IsChecked="{Binding IsCompleted, Mode=TwoWay}"
+                                                    VerticalAlignment="Center" />
+
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    Text="{Binding Title}"
+                                                    FontSize="11.5"
+                                                    TextWrapping="Wrap"
+                                                    Foreground="#62747F"
+                                                    VerticalAlignment="Center" />
+
+                                                <Button
+                                                    Grid.Column="2"
+                                                    Classes="icon"
+                                                    Content="×"
+                                                    FontSize="11"
+                                                    Command="{ReflectionBinding #Root.DataContext.DeleteSubTaskCommand}"
+                                                    CommandParameter="{Binding}" />
+
+                                            </Grid>
+
+                                        </DataTemplate>
+
+                                    </ItemsControl.ItemTemplate>
+
+                                </ItemsControl>
+
+                            </StackPanel>
+
+
+                            <!-- 协作：负责人 + 评论 -->
+                            <StackPanel Spacing="7">
+
+                                <TextBlock Text="协作" Classes="field-label" />
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+
+                                    <TextBox
+                                        Classes="editor"
+                                        Text="{Binding Assignee,
+                                                       Mode=TwoWay,
+                                                       UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="分配给…" />
+
+                                    <Button
+                                        Grid.Column="1"
+                                        Classes="ghost"
+                                        Content="给我"
+                                        Command="{ReflectionBinding #Root.DataContext.AssignToMeCommand}"
+                                        CommandParameter="{Binding}" />
+
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+
+                                    <TextBox
+                                        Classes="editor"
+                                        Text="{ReflectionBinding #Root.DataContext.NewCommentText,
+                                                       UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="写评论，用 @名字 提及他人">
+
+                                        <TextBox.KeyBindings>
+                                            <KeyBinding
+                                                Gesture="Enter"
+                                                Command="{ReflectionBinding #Root.DataContext.AddCommentCommand}" />
+                                        </TextBox.KeyBindings>
+
+                                    </TextBox>
+
+                                    <Button
+                                        Grid.Column="1"
+                                        Classes="ghost"
+                                        Content="发送"
+                                        Command="{ReflectionBinding #Root.DataContext.AddCommentCommand}" />
+
+                                </Grid>
+
+                                <ItemsControl ItemsSource="{Binding Comments}">
+
+                                    <ItemsControl.ItemTemplate>
+
+                                        <DataTemplate x:DataType="model:TaskComment">
+
+                                            <Border
+                                                Background="#FAFCFD"
+                                                CornerRadius="9"
+                                                Padding="9"
+                                                Margin="0,2">
+
+                                                <Grid ColumnDefinitions="*,Auto">
+
+                                                    <StackPanel Spacing="3">
+
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+
+                                                            <TextBlock
+                                                                Text="{Binding Author}"
+                                                                FontSize="11"
+                                                                FontWeight="SemiBold"
+                                                                Foreground="#4D9DB7" />
+
+                                                            <TextBlock
+                                                                Text="{Binding CreatedAtLabel}"
+                                                                FontSize="9.5"
+                                                                Foreground="#A8B6BE"
+                                                                VerticalAlignment="Center" />
+
+                                                            <Border
+                                                                Classes="chip pink"
+                                                                Padding="5,1"
+                                                                IsVisible="{Binding HasMentions}">
+
+                                                                <TextBlock
+                                                                    Text="{Binding MentionsLabel}"
+                                                                    FontSize="9"
+                                                                    Foreground="#B8798A" />
+
+                                                            </Border>
+
+                                                        </StackPanel>
+
+                                                        <TextBlock
+                                                            Text="{Binding Text}"
+                                                            FontSize="11.5"
+                                                            TextWrapping="Wrap"
+                                                            Foreground="#62747F" />
+
+                                                    </StackPanel>
+
+                                                    <Button
+                                                        Grid.Column="1"
+                                                        Classes="icon"
+                                                        Content="×"
+                                                        FontSize="11"
+                                                        VerticalAlignment="Top"
+                                                        Command="{ReflectionBinding #Root.DataContext.DeleteCommentCommand}"
+                                                        CommandParameter="{Binding}" />
+
+                                                </Grid>
+
+                                            </Border>
+
+                                        </DataTemplate>
+
+                                    </ItemsControl.ItemTemplate>
+
+                                </ItemsControl>
+
+                            </StackPanel>
+
+
+                            <!-- 打卡统计 -->
+                            <Border
+                                Background="#FFF4F6"
+                                CornerRadius="10"
+                                Padding="11"
+                                IsVisible="{Binding IsRepeating}">
+
+                                <Grid ColumnDefinitions="*,Auto">
+
+                                    <StackPanel>
+                                        <TextBlock Text="连续打卡" FontSize="10" Foreground="#8A98A3" />
+                                        <TextBlock
+                                            Text="{Binding StreakLabel}"
+                                            FontSize="17"
+                                            FontWeight="SemiBold"
+                                            Foreground="#C67889" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                        <TextBlock
+                                            Text="{Binding RepeatLabel}"
+                                            FontSize="10"
+                                            Foreground="#C67889"
+                                            HorizontalAlignment="Right" />
+                                        <TextBlock
+                                            Text="{Binding TotalCompletions,
+                                                StringFormat='累计 {0} 次'}"
+                                            FontSize="10"
+                                            Foreground="#C67889"
+                                            HorizontalAlignment="Right" />
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+
+                            <!-- 元信息 -->
+                            <Border
+                                Background="#F8FCFD"
+                                CornerRadius="10"
+                                Padding="11">
+
+                                <StackPanel Spacing="4">
+
+                                    <TextBlock
+                                        Text="{Binding CreatedAt,
+                                            StringFormat='创建 {0:yyyy-MM-dd HH:mm}'}"
+                                        FontSize="10"
+                                        Foreground="#9AA6AF" />
+
+                                    <TextBlock
+                                        Text="{Binding UpdatedAt,
+                                            StringFormat='更新 {0:yyyy-MM-dd HH:mm}'}"
+                                        FontSize="10"
+                                        Foreground="#9AA6AF" />
+
+                                    <TextBlock
+                                        Text="{Binding CompletedAtLabel,
+                                            StringFormat='完成 {0}'}"
+                                        FontSize="10"
+                                        Foreground="#9AA6AF"
+                                        IsVisible="{Binding IsCompleted}" />
+
+                                </StackPanel>
+
+                            </Border>
+
+
+                            <!-- 操作 -->
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+
+                                <Button
+                                    Classes="primary"
+                                    Content="开始执行"
+                                    Command="{ReflectionBinding #Root.DataContext.StartTaskCommand}"
+                                    CommandParameter="{Binding}" />
+
+                                <Button
+                                    Classes="soft"
+                                    Content="归档"
+                                    Command="{ReflectionBinding #Root.DataContext.ArchiveTaskCommand}"
+                                    CommandParameter="{Binding}" />
+
+                                <Button
+                                    Classes="ghost"
+                                    Content="删除"
+                                    Command="{ReflectionBinding #Root.DataContext.DeleteTaskCommand}"
+                                    CommandParameter="{Binding}" />
+
+                            </StackPanel>
+
+                        </StackPanel>
+
+                    </ScrollViewer>
+
+
+                    <!-- ============ 无选中 ============ -->
+
+                    <StackPanel
+                        Grid.Row="1"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Width="240"
+                        Spacing="10"
+                        IsVisible="{Binding !HasSelection}">
+
+                        <Border
+                            Width="54"
+                            Height="54"
+                            CornerRadius="18"
+                            Background="#EDF9FC"
+                            HorizontalAlignment="Center">
+
+                            <TextBlock
+                                Text="✓"
+                                FontSize="26"
+                                Foreground="#6AB8CF"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+
+                        </Border>
+
+                        <TextBlock
+                            Text="选择一个任务"
+                            FontSize="16"
+                            FontWeight="SemiBold"
+                            HorizontalAlignment="Center"
+                            Foreground="#344454" />
+
+                        <TextBlock
+                            Text="从左侧列表选择任务，即可编辑详细信息和子任务。"
+                            FontSize="11"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap"
+                            Foreground="#8796A1" />
+
+                    </StackPanel>
+
+                </Grid>
+
+            </Border>
+
+        </Grid>
+
+    </Grid>
+
+</Window>
